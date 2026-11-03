@@ -42,6 +42,30 @@ Delivers true HiDPI past WindowServer's scaled-backing cap (issue #65): on 5K2K 
 
 ## VirtualDisplayService.create
 
+Virtual displays offer 50, 60, 75, 120 and 144 Hz in the create/edit form, with
+60 Hz as the default. The saved rate is advertised for the native and HiDPI
+modes and explicitly selected after creation, including automatic creation at
+launch. Changing the rate on an active display recreates it with its stable
+identity. Creation reports failure if the requested native mode and rate cannot
+be read back from CoreGraphics; it does not silently accept a lower rate.
+The rate shown in the virtual-display row is the configured rate, not a live
+measurement of frames delivered to a mirroring or streaming client.
+
+Manual regression checks on macOS (requires the built app and WindowServer):
+
+- Create 1920×1080 virtual displays at 120 Hz and 144 Hz. Verify the active
+  resolution and refresh rate in macOS Displays settings, not just Crisp's label.
+- Edit an active display from 120 to 144 Hz and back to 60 Hz; verify the applied
+  rate after each recreation. Repeat with a 3840×2160 display and HiDPI modes.
+- Deactivate/reactivate, then quit/relaunch with Create at launch enabled;
+  verify the selected rate persists and is applied again.
+- Edit an inactive display, then activate it. Verify an existing 60 Hz config
+  still opens with 60 Hz selected. Cancel an edit and confirm no change.
+- If macOS refuses a requested mode, confirm an error appears and no failed
+  display remains marked active.
+
+These hardware/runtime checks cannot be performed in the Linux cloud environment.
+
 `CGVirtualDisplay(descriptor:)` requires the main thread and returns nil off it, so descriptor build and init run on the main actor; only `apply(_:)`, which blocks on WindowServer IPC, runs off-main inside `CGHelpers.runWithTimeout`. The descriptor's `productID`/`serialNum` must be both unique per config (else a second virtual display collides with the first and WindowServer mirrors or rejects it) and stable across recreations, because macOS keys per-display settings, including the "what do you want to show" extend-or-mirror choice, on that identity; both halves are derived from the config's UUID so they never change. Size is computed from a fixed 110 PPI so each resolution reports a physical size like a real panel of that resolution, which makes macOS default to the native resolution instead of a scaled Retina mode (matching how BetterDisplay presents virtual displays); shrinking the reported size does not avoid the "what to show" prompt, since that prompt is gated on the display's reported type (HDMI/TV), not physical size, only on the default scaling. New-display registration pops that system picker, which steals key focus and would trip the panel's outside-click auto-dismiss, so `PanelOpenGuard.suppressAutoDismiss` is held for 1.5 s around creation. macOS auto-assigns a scaled looks-like-1080p default mode to any high-resolution virtual display no matter which modes are supplied, so `applyNativeResolution` retries briefly after creation until the native 1x mode (point size equals pixel size) sticks, or gives up.
 
 ## ResolutionService

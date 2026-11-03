@@ -1,0 +1,35 @@
+name: Virtual display 120-144 Hz build
+
+on:
+  push:
+    branches: [codex/virtual-display-high-refresh]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install development tools
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install swiftlint xcodegen
+      - name: Run repository checks
+        run: make check
+      - name: Check translations
+        run: python3 scripts/check-translations.py
+      - name: Build universal test DMG
+        run: ./scripts/release.sh v1.7.1-virtual-display-hz
+      - name: Record checksum
+        run: shasum -a 256 Crisp.dmg > Crisp.dmg.sha256
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Crisp-120-144Hz-macOS-universal
+          path: |
+            Crisp.dmg
+            Crisp.dmg.sha256
+          if-no-files-found: error
+          retention-days: 14
